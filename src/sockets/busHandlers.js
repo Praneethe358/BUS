@@ -1,4 +1,5 @@
 const { SOCKET_EVENTS } = require('./constants');
+const { ensureStudentForBus, ensureDriverForBus } = require('./security');
 
 const buildBusRoom = (busId) => `bus:${busId}`;
 
@@ -20,14 +21,12 @@ const isValidLocation = (payload) => {
 
 const registerBusHandlers = (io, socket) => {
   socket.on(SOCKET_EVENTS.JOIN_BUS, ({ busId } = {}) => {
-    if (!socket.user || socket.user.role !== 'student') {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only students can join bus rooms' });
+    if (!busId) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'busId is required' });
       return;
     }
 
-    const assignedBusId = socket.user.busId ? socket.user.busId.toString() : null;
-    if (!assignedBusId || assignedBusId !== busId) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Not authorized for this bus' });
+    if (!ensureStudentForBus(socket, busId)) {
       return;
     }
 
@@ -36,14 +35,12 @@ const registerBusHandlers = (io, socket) => {
   });
 
   socket.on(SOCKET_EVENTS.SEND_LOCATION, (payload = {}) => {
-    if (!socket.user || socket.user.role !== 'driver') {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only drivers can send location' });
+    if (!payload.busId) {
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'busId is required' });
       return;
     }
 
-    const assignedBusId = socket.user.busId ? socket.user.busId.toString() : null;
-    if (!assignedBusId || assignedBusId !== payload.busId) {
-      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Not authorized for this bus' });
+    if (!ensureDriverForBus(socket, payload.busId)) {
       return;
     }
 
