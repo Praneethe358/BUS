@@ -34,8 +34,77 @@ export default function BusTrackerMap({
   const mapRef = useRef<Map | null>(null);
   const markerRef = useRef<Marker | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const animationStartRef = useRef<number | null>(null);
+  const animationFromRef = useRef<[number, number] | null>(null);
+  const animationToRef = useRef<[number, number] | null>(null);
   const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
   const [latestLocation, setLatestLocation] = useState<BusLocation | null>(null);
+
+  const stopMarkerAnimation = () => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    animationStartRef.current = null;
+    animationFromRef.current = null;
+    animationToRef.current = null;
+  };
+
+  const animateMarkerTo = (nextCenter: [number, number], duration = 900) => {
+    const marker = markerRef.current;
+    if (!marker) {
+      return;
+    }
+
+    const currentPosition = marker.getLngLat();
+    const start: [number, number] = animationToRef.current ?? [currentPosition.lng, currentPosition.lat];
+
+    stopMarkerAnimation();
+
+    animationFromRef.current = start;
+    animationToRef.current = nextCenter;
+
+    const tick = (timestamp: number) => {
+      if (animationStartRef.current === null) {
+        animationStartRef.current = timestamp;
+      }
+
+      const elapsed = timestamp - animationStartRef.current;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      const from = animationFromRef.current ?? start;
+      const to = animationToRef.current ?? nextCenter;
+      const lng = from[0] + (to[0] - from[0]) * eased;
+      const lat = from[1] + (to[1] - from[1]) * eased;
+
+      marker.setLngLat([lng, lat] as LngLatLike);
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      const map = mapRef.current;
+      if (map) {
+        map.easeTo({
+          center: nextCenter as LngLatLike,
+          duration: 600,
+          essential: true,
+          zoom: Math.max(map.getZoom(), zoom),
+        });
+      }
+
+      animationFrameRef.current = null;
+      animationStartRef.current = null;
+      animationFromRef.current = null;
+      animationToRef.current = null;
+    };
+
+    animationFrameRef.current = requestAnimationFrame(tick);
+  };
 
   useEffect(() => {
     if (!busId || !socketUrl || !mapboxToken || !mapContainerRef.current) {
@@ -92,12 +161,12 @@ export default function BusTrackerMap({
       }
 
       const nextCenter: [number, number] = [payload.lng, payload.lat];
-      markerRef.current?.setLngLat(nextCenter as LngLatLike);
-      mapRef.current?.flyTo({ center: nextCenter as LngLatLike, zoom: Math.max(mapRef.current.getZoom(), zoom) });
+      animateMarkerTo(nextCenter);
       setLatestLocation(payload);
     });
 
     return () => {
+      stopMarkerAnimation();
       socket.off('connect');
       socket.off('reconnect');
       socket.off('connect_error');
