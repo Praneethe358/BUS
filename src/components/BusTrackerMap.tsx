@@ -155,14 +155,19 @@ export default function BusTrackerMap({
       setStatus('error');
     });
 
-    socket.on('receiveLocation', (payload: BusLocation) => {
-      if (!payload || payload.busId !== busId) {
+    socket.on('receiveLocation', (payload: unknown) => {
+      if (!payload || typeof payload !== 'object' || payload === null) {
         return;
       }
 
-      const nextCenter: [number, number] = [payload.lng, payload.lat];
+      const location = payload as BusLocation;
+      if (location.busId !== busId) {
+        return;
+      }
+
+      const nextCenter: [number, number] = [location.lng, location.lat];
       animateMarkerTo(nextCenter);
-      setLatestLocation(payload);
+      setLatestLocation(location);
     });
 
     return () => {
