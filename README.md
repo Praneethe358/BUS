@@ -80,3 +80,46 @@ export default function DriverTracker({ busId, token, socketUrl }: DriverTracker
 	return <p>Socket status: {status}</p>;
 }
 ```
+
+	## Socket.IO security and usage
+
+	### Authentication (handshake)
+
+	- The backend uses JWT on the Socket.IO handshake.
+	- Clients must pass the token as:
+		- `auth: { token: '<JWT>' }` when calling `io(SERVER_URL, { auth })`.
+	- On the server side (already implemented in `src/sockets/index.js`):
+		- The token is verified with `JWT_SECRET`.
+		- The user is loaded from MongoDB and attached as `socket.user`.
+		- Connections without a valid token are rejected.
+
+	### Driver: sendLocation (secured)
+
+	- Only users with `role: 'driver'` may emit `sendLocation`.
+	- The driver must be assigned a `busId` in the database.
+	- On `sendLocation`:
+		- Server checks `socket.user.role === 'driver'`.
+		- Server checks `socket.user.busId === payload.busId`.
+		- Valid payload is broadcast to room `bus:<busId>` via `receiveLocation`.
+
+	### Student: joinBus (secured)
+
+	- Only users with `role: 'student'` may join a bus room.
+	- The student must be assigned a `busId` in the database.
+	- Client emits `joinBus` with `{ busId }`.
+	- On `joinBus`:
+		- Server checks `socket.user.role === 'student'`.
+		- Server checks `socket.user.busId === busId`.
+		- If authorized, socket joins room `bus:<busId>` and receives `joinedBus`.
+
+	### Rooms and events
+
+	- Each bus has a dedicated room: `bus:<busId>`.
+	- Events:
+		- `joinBus` → student asks to join their bus room.
+		- `joinedBus` → server confirms student joined the room.
+		- `sendLocation` → driver sends GPS updates.
+		- `receiveLocation` → server broadcasts bus location to all students in that bus room.
+		- `error` → server sends security/validation errors for unauthorized or invalid actions.
+
+	This ensures only authenticated drivers can publish locations for their bus, and only authenticated students subscribed to that same bus receive those updates.

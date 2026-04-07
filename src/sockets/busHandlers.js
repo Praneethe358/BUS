@@ -1,7 +1,12 @@
 const { SOCKET_EVENTS } = require('./constants');
 const { ensureStudentForBus, ensureDriverForBus } = require('./security');
+const { distanceInMeters } = require('./distance');
 
 const buildBusRoom = (busId) => `bus:${busId}`;
+
+const lastLocationCache = new Map(); // key: busId, value: { lat, lng, ts }
+const MIN_MOVE_METERS = 10;
+const MIN_INTERVAL_MS = 2000;
 
 const isValidLocation = (payload) => {
   if (!payload || typeof payload !== 'object') {
@@ -49,6 +54,22 @@ const registerBusHandlers = (io, socket) => {
       return;
     }
 
+    const key = payload.busId.toString();
+    const now = Date.now();
+    const prev = lastLocationCache.get(key);
+
+    if (prev) {
+      const moved = distanceInMeters(prev.lat, prev.lng, payload.lat, payload.lng);
+      const dt = now - prev.ts;
+
+      if (moved < MIN_MOVE_METERS && dt < MIN_INTERVAL_MS) {
+        // Ignore tiny and too-frequent updates
+        return;
+      }
+    }
+
+    lastLocationCache.set(key, { lat: payload.lat, lng: payload.lng, ts: now });
+
     const room = buildBusRoom(payload.busId);
     const location = {
       busId: payload.busId,
@@ -56,7 +77,7 @@ const registerBusHandlers = (io, socket) => {
       lng: payload.lng,
       speed: typeof payload.speed === 'number' ? payload.speed : undefined,
       heading: typeof payload.heading === 'number' ? payload.heading : undefined,
-      timestamp: typeof payload.timestamp === 'number' ? payload.timestamp : Date.now(),
+      timestamp: typeof payload.timestamp === 'number' ? payload.timestamp : now,
       driverId: socket.user._id,
     };
 
