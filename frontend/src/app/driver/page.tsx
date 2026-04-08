@@ -3,27 +3,8 @@
 import { useEffect } from "react";
 import { BusMap } from "../../components/map/BusMap";
 import { DriverPanel } from "../../components/driver/DriverPanel";
-import { useBusStore, Stop } from "../../store/busStore";
-
-const demoStops: Stop[] = [
-  { id: "1", name: "Hostel", lat: 12.935, lng: 77.605 },
-  { id: "2", name: "Library", lat: 12.938, lng: 77.61 },
-  { id: "3", name: "Main Gate", lat: 12.94, lng: 77.615 },
-];
-
-const demoRoute: GeoJSON.FeatureCollection = {
-  type: "FeatureCollection",
-  features: [
-    {
-      type: "Feature",
-      properties: {},
-      geometry: {
-        type: "LineString",
-        coordinates: demoStops.map((s) => [s.lng, s.lat]),
-      },
-    },
-  ],
-};
+import { useBusStore } from "../../store/busStore";
+import { sampleRoute, sampleStops } from "../../data/sampleRoute";
 
 export default function DriverPage() {
   const busId = "demo-bus-id"; // Replace with actual busId for this driver
@@ -31,7 +12,7 @@ export default function DriverPage() {
 
   useEffect(() => {
     setBusMeta({ busId, busNumber: "21A" });
-    setRoute(demoRoute, demoStops);
+    setRoute(sampleRoute, sampleStops);
   }, [busId, setBusMeta, setRoute]);
 
   return (
@@ -56,7 +37,7 @@ export default function DriverPage() {
         </section>
 
         <aside className="flex h-full min-h-[220px] w-full flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-900/70 p-4 text-sm shadow-2xl md:h-auto md:max-w-xs">
-          <DriverPanel busId={busId} />
+          <DriverPanel busId={busId} busNumber="21A" />
           <div className="rounded-2xl bg-slate-950/70 p-3 text-xs text-slate-400">
             <p>
               Keep this tab open while driving. Your location will be shared

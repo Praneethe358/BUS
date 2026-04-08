@@ -1,9 +1,10 @@
-import { create } from "zustand";
+import { create, type StateCreator } from "zustand";
+import type { Feature, LineString } from "geojson";
 
 export type BusStatus = "unknown" | "moving" | "stopped";
 
 export interface BusLocation {
-  busId: string;
+  busId?: string;
   lat: number;
   lng: number;
   speed?: number;
@@ -22,21 +23,21 @@ export interface Stop {
 export interface BusState {
   busId: string | null;
   busNumber: string | null;
-  routeGeoJson: any | null;
+  routeGeoJson: Feature<LineString> | null;
   stops: Stop[];
   busLocation: BusLocation | null;
   etaMinutes: number | null;
   status: BusStatus;
   nextStop: Stop | null;
   setBusMeta: (payload: { busId: string; busNumber?: string | null }) => void;
-  setRoute: (route: any, stops: Stop[]) => void;
-  setBusLocation: (location: BusLocation) => void;
+  setRoute: (route: Feature<LineString> | null, stops: Stop[]) => void;
+  setBusLocation: (location: BusLocation | null) => void;
   setEta: (etaMinutes: number | null) => void;
   setStatus: (status: BusStatus) => void;
   setNextStop: (stop: Stop | null) => void;
 }
 
-export const useBusStore = create<BusState>((set) => ({
+const storeCreator: StateCreator<BusState> = (set) => ({
   busId: null,
   busNumber: null,
   routeGeoJson: null,
@@ -47,13 +48,15 @@ export const useBusStore = create<BusState>((set) => ({
   nextStop: null,
   setBusMeta: ({ busId, busNumber = null }: { busId: string; busNumber?: string | null }) =>
     set(() => ({ busId, busNumber })),
-  setRoute: (route: any, stops: Stop[]) =>
+  setRoute: (route: Feature<LineString> | null, stops: Stop[]) =>
     set(() => ({
       routeGeoJson: route,
       stops,
     })),
-  setBusLocation: (location: BusLocation) => set(() => ({ busLocation: location })),
+  setBusLocation: (location: BusLocation | null) => set(() => ({ busLocation: location })),
   setEta: (etaMinutes: number | null) => set(() => ({ etaMinutes })),
   setStatus: (status: BusStatus) => set(() => ({ status })),
   setNextStop: (stop: Stop | null) => set(() => ({ nextStop: stop })),
-}));
+});
+
+export const useBusStore = create<BusState>(storeCreator);

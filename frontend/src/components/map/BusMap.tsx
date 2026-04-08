@@ -1,67 +1,112 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useBusStore, Stop } from "../../store/busStore";
+import { useEffect, useMemo, useRef } from "react";
+import type { GeoJSONSource, Map, Marker } from "mapbox-gl";
+import { useBusStore, type Stop } from "../../store/busStore";
 
-const MAPBOX_TOKEN: string | undefined =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ((globalThis as any)?.process?.env?.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN as string | undefined);
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+
+const buildStopMarker = (stop: Stop) => {
+  const el = document.createElement("div");
+  el.className =
+    "relative flex h-3.5 w-3.5 items-center justify-center rounded-full border border-slate-200 bg-white shadow-md";
+  el.setAttribute("data-stop-id", stop.id);
+
+  const dot = document.createElement("span");
+  dot.className = "absolute h-2 w-2 rounded-full bg-sky-500";
+  el.appendChild(dot);
+
+  return el;
+};
+
+const buildBusMarker = () => {
+  const el = document.createElement("div");
+  el.className =
+    "relative h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-emerald-500 shadow-xl";
+  el.innerHTML =
+    "<span class=\"absolute inset-0 animate-ping rounded-full bg-emerald-400/50\"></span>";
+  return el;
+};
 
 export function BusMap() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
-  const busMarkerRef = useRef<any>(null);
-  const routeAddedRef = useRef(false);
-  const stopsMarkersRef = useRef<any[]>([]);
+  const mapRef = useRef<Map | null>(null);
+  const busMarkerRef = useRef<Marker | null>(null);
+  const stopsMarkersRef = useRef<Marker[]>([]);
+  const animationRef = useRef<number | null>(null);
+  const lastMoveRef = useRef<{ lng: number; lat: number; ts: number } | null>(null);
 
   const { routeGeoJson, stops, busLocation, nextStop } = useBusStore();
+  const hasToken = useMemo(() => Boolean(MAPBOX_TOKEN), []);
 
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current || !MAPBOX_TOKEN) return;
+    if (!mapContainerRef.current || mapRef.current || !hasToken) {
+      return;
+    }
 
-    let isCancelled = false;
+    let cancelled = false;
 
     const init = async () => {
       const mapboxgl = (await import("mapbox-gl")).default;
-      mapboxgl.accessToken = MAPBOX_TOKEN;
+      mapboxgl.accessToken = MAPBOX_TOKEN || "";
 
-      if (isCancelled) return;
+      if (cancelled) {
+        return;
+      }
 
       const map = new mapboxgl.Map({
         container: mapContainerRef.current!,
         style: "mapbox://styles/mapbox/streets-v12",
         center: [77.5946, 12.9716],
-        zoom: 12,
+        zoom: 13,
         pitch: 45,
+        bearing: -12,
+        antialias: true,
       });
 
-      map.addControl(new mapboxgl.NavigationControl(), "top-right");
+      map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
       mapRef.current = map;
 
       map.on("load", () => {
-        if (routeGeoJson && !routeAddedRef.current) {
+        if (routeGeoJson) {
           map.addSource("route", {
             type: "geojson",
             data: routeGeoJson,
           });
+
           map.addLayer({
             id: "route-line",
             type: "line",
             source: "route",
+            layout: {
+              "line-cap": "round",
+              "line-join": "round",
+            },
             paint: {
-              "line-color": "#2563eb",
-              "line-width": 4,
+              "line-color": "#38bdf8",
+              "line-width": 5,
+              "line-opacity": 0.9,
             },
           });
-          routeAddedRef.current = true;
+
+          map.addLayer({
+            id: "route-glow",
+            type: "line",
+            source: "route",
+            paint: {
+              "line-color": "#38bdf8",
+              "line-width": 12,
+              "line-opacity": 0.15,
+            },
+          });
         }
 
         if (stops.length > 0 && stopsMarkersRef.current.length === 0) {
           stopsMarkersRef.current = stops.map((stop: Stop) => {
-            const el = document.createElement("div");
-            el.className =
-              "rounded-full bg-white shadow-md border border-blue-500 w-4 h-4 -translate-x-1/2 -translate-y-1/2";
-            return new mapboxgl.Marker(el).setLngLat([stop.lng, stop.lat]).addTo(map);
+            const marker = new mapboxgl.Marker(buildStopMarker(stop))
+              .setLngLat([stop.lng, stop.lat])
+              .addTo(map);
+            return marker;
           });
         }
       });
@@ -70,69 +115,182 @@ export function BusMap() {
     void init();
 
     return () => {
-      isCancelled = true;
+      cancelled = true;
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
       }
-      stopsMarkersRef.current.forEach((m) => m.remove());
+      stopsMarkersRef.current.forEach((marker) => marker.remove());
       stopsMarkersRef.current = [];
       busMarkerRef.current = null;
-      routeAddedRef.current = false;
     };
-  }, [routeGeoJson, stops]);
+  }, [hasToken, routeGeoJson, stops]);
 
   useEffect(() => {
-    if (!mapRef.current || !busLocation) return;
+    if (!mapRef.current || !busLocation) {
+      return;
+    }
 
-    void (async () => {
+    let isActive = true;
+
+    const updateMarker = async () => {
       const mapboxgl = (await import("mapbox-gl")).default;
-
-      if (!busMarkerRef.current) {
-        const el = document.createElement("div");
-        el.className =
-          "w-5 h-5 rounded-full bg-emerald-500 border-2 border-white shadow-lg -translate-x-1/2 -translate-y-1/2";
-        busMarkerRef.current = new mapboxgl.Marker(el).setLngLat([
-          busLocation.lng,
-          busLocation.lat,
-        ]);
-        busMarkerRef.current.addTo(mapRef.current);
-      } else {
-        busMarkerRef.current.setLngLat([busLocation.lng, busLocation.lat]);
+      const map = mapRef.current;
+      if (!map || !isActive) {
+        return;
       }
 
-      mapRef.current.easeTo({
+      if (!busMarkerRef.current) {
+        busMarkerRef.current = new mapboxgl.Marker(buildBusMarker())
+          .setLngLat([busLocation.lng, busLocation.lat])
+          .addTo(map);
+        lastMoveRef.current = {
+          lng: busLocation.lng,
+          lat: busLocation.lat,
+          ts: Date.now(),
+        };
+      } else {
+        const prev = lastMoveRef.current;
+        const start = prev || {
+          lng: busLocation.lng,
+          lat: busLocation.lat,
+          ts: Date.now(),
+        };
+        const end = {
+          lng: busLocation.lng,
+          lat: busLocation.lat,
+          ts: Date.now(),
+        };
+
+        const duration = 1200;
+        const startTime = performance.now();
+
+        const step = (now: number) => {
+          const t = Math.min(1, (now - startTime) / duration);
+          const eased = t * (2 - t);
+          const lng = start.lng + (end.lng - start.lng) * eased;
+          const lat = start.lat + (end.lat - start.lat) * eased;
+          busMarkerRef.current?.setLngLat([lng, lat]);
+
+          if (t < 1) {
+            animationRef.current = requestAnimationFrame(step);
+          }
+        };
+
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+        }
+        animationRef.current = requestAnimationFrame(step);
+        lastMoveRef.current = end;
+      }
+
+      map.easeTo({
         center: [busLocation.lng, busLocation.lat],
         duration: 1000,
-        zoom: Math.max(mapRef.current.getZoom(), 14),
+        zoom: Math.max(map.getZoom(), 14),
       });
-    })();
+    };
+
+    void updateMarker();
+
+    return () => {
+      isActive = false;
+    };
   }, [busLocation]);
 
   useEffect(() => {
-    if (!mapRef.current || !nextStop) return;
+    if (!mapRef.current || !routeGeoJson) {
+      return;
+    }
 
-    const existing = stopsMarkersRef.current;
-    if (!existing.length) return;
+    const map = mapRef.current;
+    const source = map.getSource("route") as GeoJSONSource | undefined;
+    if (source) {
+      source.setData(routeGeoJson);
+      return;
+    }
 
-    existing.forEach((marker) => {
-      const el = marker.getElement();
-      el.classList.remove("bg-blue-600", "w-5", "h-5");
-      el.classList.add("bg-white", "w-4", "h-4");
+    if (!map.isStyleLoaded()) {
+      return;
+    }
+
+    map.addSource("route", {
+      type: "geojson",
+      data: routeGeoJson,
     });
 
-    const idx = stops.findIndex((s: Stop) => s.id === nextStop.id);
-    if (idx >= 0) {
-      const marker = existing[idx];
-      const el = marker.getElement();
-      el.classList.remove("bg-white", "w-4", "h-4");
-      el.classList.add("bg-blue-600", "w-5", "h-5");
-    }
-  }, [nextStop, stops]);
+    map.addLayer({
+      id: "route-line",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-cap": "round",
+        "line-join": "round",
+      },
+      paint: {
+        "line-color": "#38bdf8",
+        "line-width": 5,
+        "line-opacity": 0.9,
+      },
+    });
 
-  if (!MAPBOX_TOKEN) {
+    map.addLayer({
+      id: "route-glow",
+      type: "line",
+      source: "route",
+      paint: {
+        "line-color": "#38bdf8",
+        "line-width": 12,
+        "line-opacity": 0.15,
+      },
+    });
+  }, [routeGeoJson]);
+
+  useEffect(() => {
+    if (!mapRef.current) {
+      return;
+    }
+
+    stopsMarkersRef.current.forEach((marker) => marker.remove());
+    stopsMarkersRef.current = [];
+
+    if (stops.length === 0) {
+      return;
+    }
+
+    const map = mapRef.current;
+    const mapboxglPromise = import("mapbox-gl");
+    mapboxglPromise.then(({ default: mapboxgl }) => {
+      stopsMarkersRef.current = stops.map((stop: Stop) => {
+        const marker = new mapboxgl.Marker(buildStopMarker(stop))
+          .setLngLat([stop.lng, stop.lat])
+          .addTo(map);
+        return marker;
+      });
+    });
+  }, [stops]);
+
+  useEffect(() => {
+    if (!nextStop) {
+      return;
+    }
+
+    stopsMarkersRef.current.forEach((marker) => {
+      const el = marker.getElement();
+      const isNext = el.getAttribute("data-stop-id") === nextStop.id;
+      el.classList.toggle("ring-2", isNext);
+      el.classList.toggle("ring-emerald-400", isNext);
+      el.classList.toggle("scale-110", isNext);
+    });
+  }, [nextStop]);
+
+  if (!hasToken) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-sm text-red-600">
+      <div className="flex h-full w-full items-center justify-center text-sm text-red-500">
         Mapbox token missing. Set NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN.
       </div>
     );

@@ -2,42 +2,22 @@
 
 import { useEffect } from "react";
 import { BusMap } from "../../components/map/BusMap";
-import { useSocket } from "../../hooks/useSocket";
-import { useBusStore, Stop } from "../../store/busStore";
-
-// Example static route & stops; in production you would load these
-// from your backend's /bus API for the logged-in student.
-const demoStops: Stop[] = [
-  { id: "1", name: "Hostel", lat: 12.935, lng: 77.605 },
-  { id: "2", name: "Library", lat: 12.938, lng: 77.61 },
-  { id: "3", name: "Main Gate", lat: 12.94, lng: 77.615 },
-];
-
-const demoRoute: GeoJSON.FeatureCollection = {
-  type: "FeatureCollection",
-  features: [
-    {
-      type: "Feature",
-      properties: {},
-      geometry: {
-        type: "LineString",
-        coordinates: demoStops.map((s) => [s.lng, s.lat]),
-      },
-    },
-  ],
-};
+import { useStudentSocket } from "../../hooks/useStudentSocket";
+import { useBusStore, type Stop } from "../../store/busStore";
+import { formatEta } from "../../lib/geo";
+import { sampleRoute, sampleStops } from "../../data/sampleRoute";
 
 export default function StudentPage() {
   const busId = "demo-bus-id"; // Replace with student's assigned busId
 
-  const { busLocation, etaMinutes, status, nextStop, setBusMeta, setRoute } =
+  const { etaMinutes, status, nextStop, setBusMeta, setRoute, stops } =
     useBusStore();
 
-  useSocket("student", busId);
+  useStudentSocket({ busId });
 
   useEffect(() => {
     setBusMeta({ busId, busNumber: "21A" });
-    setRoute(demoRoute, demoStops);
+    setRoute(sampleRoute, sampleStops);
   }, [busId, setBusMeta, setRoute]);
 
   return (
@@ -76,9 +56,7 @@ export default function StudentPage() {
                   <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
                     ETA
                   </p>
-                  <p className="text-lg font-semibold">
-                    {etaMinutes ? `${Math.round(etaMinutes)} min` : "--"}
-                  </p>
+                  <p className="text-lg font-semibold">{formatEta(etaMinutes)}</p>
                   <p
                     className={`mt-1 text-[11px] ${
                       status === "moving"
@@ -105,7 +83,7 @@ export default function StudentPage() {
             Route overview
           </h2>
           <div className="space-y-2">
-            {demoStops.map((stop, index) => {
+            {stops.map((stop: Stop, index: number) => {
               const isNext = nextStop?.id === stop.id;
               return (
                 <div
