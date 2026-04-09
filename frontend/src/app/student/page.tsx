@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { BusMap } from "../../components/map/BusMap";
 import { useStudentSocket } from "../../hooks/useStudentSocket";
 import { useBusStore, type Stop } from "../../store/busStore";
@@ -8,12 +8,20 @@ import { formatEta } from "../../lib/geo";
 import { sampleRoute, sampleStops } from "../../data/sampleRoute";
 
 export default function StudentPage() {
-  const busId = "demo-bus-id"; // Replace with student's assigned busId
+  const busId = "demo-bus-id";
 
-  const { etaMinutes, status, nextStop, setBusMeta, setRoute, stops } =
+  const { busNumber, etaMinutes, status, nextStop, setBusMeta, setRoute, stops } =
     useBusStore();
 
   useStudentSocket({ busId });
+
+  const isArriving = useMemo(() => {
+    return Boolean(etaMinutes !== null && etaMinutes <= 3 && status !== "stopped");
+  }, [etaMinutes, status]);
+
+  const routeLabel = useMemo(() => {
+    return sampleRoute.properties?.name || "Campus Loop";
+  }, []);
 
   useEffect(() => {
     setBusMeta({ busId, busNumber: "21A" });
@@ -21,102 +29,169 @@ export default function StudentPage() {
   }, [busId, setBusMeta, setRoute]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-950 text-white">
-      <header className="flex items-center justify-between px-4 py-3 shadow-md shadow-slate-900/80">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/90 text-sm font-semibold text-slate-950">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.14),_transparent_32%),linear-gradient(180deg,#020617_0%,#020617_35%,#0f172a_100%)] text-white">
+      <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 pb-3 pt-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-cyan-500 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/20">
             SB
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-              Student
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Student Tracker
             </p>
-            <p className="text-sm font-medium">Live Bus Tracker</p>
+            <p className="text-lg font-semibold tracking-tight">Live Bus Journey</p>
           </div>
+        </div>
+        <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-slate-200 backdrop-blur md:flex">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(52,211,153,0.14)]" />
+          Auto-follow enabled
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col gap-4 p-4 md:flex-row">
-        <section className="relative h-[360px] flex-1 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/70 shadow-2xl md:h-auto">
-          <BusMap />
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 pb-6 pt-2 sm:px-6 lg:px-8 lg:pb-8">
+        <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/70 shadow-[0_24px_90px_rgba(2,6,23,0.45)] ring-1 ring-white/5">
+          <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-transparent to-emerald-400/10" />
+          <div className="relative h-[74vh] min-h-[560px] w-full lg:h-[78vh]">
+            <BusMap />
 
-          <div className="pointer-events-none absolute inset-x-4 bottom-4 flex justify-between gap-3">
-            <article className="pointer-events-auto flex-1 rounded-3xl bg-slate-950/90 p-4 shadow-xl backdrop-blur">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                    Bus
-                  </p>
-                  <p className="text-base font-semibold">21A · Campus Loop</p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {nextStop ? `Next · ${nextStop.name}` : "Waiting for location"}
-                  </p>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-3 pb-3 sm:px-4 sm:pb-4 lg:px-6 lg:pb-6">
+              <article className="pointer-events-auto w-full max-w-3xl rounded-[1.75rem] border border-white/10 bg-slate-950/85 p-4 shadow-[0_18px_70px_rgba(2,6,23,0.55)] backdrop-blur-xl transition duration-300 ease-out animate-[floatUp_400ms_ease-out] sm:p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-white/6 px-3 py-1 text-[11px] font-medium tracking-[0.18em] text-slate-300 uppercase">
+                        Bus {busNumber || "21A"}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold tracking-[0.14em] uppercase transition-all duration-300 ${
+                          isArriving
+                            ? "bg-amber-400/15 text-amber-300 shadow-[0_0_0_1px_rgba(251,191,36,0.18)]"
+                            : status === "moving"
+                            ? "bg-emerald-400/15 text-emerald-300"
+                            : status === "stopped"
+                            ? "bg-slate-500/15 text-slate-300"
+                            : "bg-sky-400/15 text-sky-300"
+                        }`}
+                      >
+                        <span
+                          className={`h-2 w-2 rounded-full ${
+                            isArriving ? "bg-amber-300 animate-pulse" : "bg-current"
+                          }`}
+                        />
+                        {isArriving ? "Bus arriving" : status === "moving" ? "In transit" : status === "stopped" ? "Stopped" : "Waiting"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-medium text-slate-400">{routeLabel}</p>
+                      <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+                        Next stop: {nextStop?.name || "Waiting for location"}
+                      </h1>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                          ETA
+                        </p>
+                        <p className="mt-1 text-2xl font-semibold text-white transition-all duration-300">
+                          {formatEta(etaMinutes)}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                          Status
+                        </p>
+                        <p className="mt-1 text-lg font-semibold capitalize text-white transition-all duration-300">
+                          {status}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3 sm:col-span-1 col-span-2 sm:col-auto">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                          Arrival
+                        </p>
+                        <p className="mt-1 text-lg font-semibold text-amber-300 transition-all duration-300">
+                          {isArriving ? "Very close" : "On schedule"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-row items-center gap-3 sm:flex-col sm:items-end sm:text-right">
+                    <div className="rounded-2xl border border-white/8 bg-gradient-to-br from-emerald-400/15 to-cyan-400/10 px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                        Live signal
+                      </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="relative flex h-3 w-3 items-center justify-center">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60 opacity-70" />
+                          <span className="relative h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(52,211,153,0.12)]" />
+                        </span>
+                        <span className="text-sm font-medium text-emerald-100">
+                          Tracking active
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                        Next stop
+                      </p>
+                      <p className="mt-1 max-w-[14rem] text-sm font-semibold text-white">
+                        {nextStop?.name || "Waiting for bus"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                    ETA
-                  </p>
-                  <p className="text-lg font-semibold">{formatEta(etaMinutes)}</p>
-                  <p
-                    className={`mt-1 text-[11px] ${
-                      status === "moving"
-                        ? "text-emerald-400"
-                        : status === "stopped"
-                        ? "text-amber-400"
-                        : "text-slate-500"
-                    }`}
-                  >
-                    {status === "moving"
-                      ? "On the move"
-                      : status === "stopped"
-                      ? "Temporarily stopped"
-                      : "Waiting for bus"}
-                  </p>
+
+                <div className="mt-4 rounded-[1.25rem] border border-white/8 bg-white/4 p-3 sm:p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                      Route stops
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {nextStop ? `Approaching ${nextStop.name}` : "Route synced"}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                    {stops.map((stop: Stop, index: number) => {
+                      const isNext = nextStop?.id === stop.id;
+                      return (
+                        <div
+                          key={stop.id}
+                          className={`min-w-[150px] rounded-2xl border px-3 py-3 transition-all duration-300 ${
+                            isNext
+                              ? "border-amber-400/40 bg-amber-400/10 shadow-[0_12px_40px_rgba(251,191,36,0.12)]"
+                              : "border-white/8 bg-slate-950/40"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${
+                                  isNext ? "bg-amber-300 shadow-[0_0_0_6px_rgba(251,191,36,0.12)]" : "bg-slate-600"
+                                }`}
+                              />
+                              <p className="text-sm font-medium text-white">{stop.name}</p>
+                            </div>
+                            <span className="text-[11px] text-slate-500">{index + 1}</span>
+                          </div>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                isNext ? "w-full bg-gradient-to-r from-amber-300 to-orange-400" : "w-1/3 bg-slate-600"
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            </article>
+              </article>
+            </div>
           </div>
         </section>
-
-        <aside className="flex h-full min-h-[220px] w-full flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-900/70 p-4 text-sm shadow-2xl md:h-auto md:max-w-xs">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-            Route overview
-          </h2>
-          <div className="space-y-2">
-            {stops.map((stop: Stop, index: number) => {
-              const isNext = nextStop?.id === stop.id;
-              return (
-                <div
-                  key={stop.id}
-                  className={`flex items-center justify-between rounded-2xl px-3 py-2 text-xs ${
-                    isNext
-                      ? "bg-emerald-500/10 border border-emerald-500/60"
-                      : "bg-slate-900/80 border border-slate-800"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`h-2 w-2 rounded-full ${
-                        isNext ? "bg-emerald-400" : "bg-slate-600"
-                      }`}
-                    />
-                    <span>{stop.name}</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400">
-                    Stop {index + 1}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-auto rounded-2xl bg-slate-950/60 p-3 text-xs text-slate-400">
-            <p>
-              This view auto-follows your bus and highlights the upcoming stop
-              based on the latest GPS updates.
-            </p>
-          </div>
-        </aside>
       </main>
     </div>
   );

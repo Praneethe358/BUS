@@ -22,9 +22,18 @@ const buildStopMarker = (stop: Stop) => {
 const buildBusMarker = () => {
   const el = document.createElement("div");
   el.className =
-    "relative h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-emerald-500 shadow-xl";
-  el.innerHTML =
-    "<span class=\"absolute inset-0 animate-ping rounded-full bg-emerald-400/50\"></span>";
+    "relative h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-gradient-to-br from-emerald-400 to-cyan-500 shadow-[0_12px_28px_rgba(16,185,129,0.35)]";
+
+  const pulse = document.createElement("span");
+  pulse.className =
+    "absolute inset-0 animate-ping rounded-full bg-emerald-300/40";
+  el.appendChild(pulse);
+
+  const core = document.createElement("span");
+  core.className =
+    "absolute inset-[4px] rounded-full border border-white/80 bg-white";
+  el.appendChild(core);
+
   return el;
 };
 
