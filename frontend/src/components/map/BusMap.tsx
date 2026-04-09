@@ -34,6 +34,13 @@ const buildBusMarker = () => {
     "absolute inset-[4px] rounded-full border border-white/80 bg-white";
   el.appendChild(core);
 
+  const arrow = document.createElement("span");
+  arrow.className =
+    "absolute -top-2 left-1/2 h-3 w-3 -translate-x-1/2 rounded-sm bg-white shadow";
+  arrow.style.clipPath = "polygon(50% 0%, 0% 100%, 100% 100%)";
+  arrow.setAttribute("data-bus-arrow", "true");
+  el.appendChild(arrow);
+
   return el;
 };
 
@@ -41,6 +48,7 @@ export function BusMap() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const busMarkerRef = useRef<Marker | null>(null);
+  const busMarkerArrowRef = useRef<HTMLSpanElement | null>(null);
   const stopsMarkersRef = useRef<Marker[]>([]);
   const animationRef = useRef<number | null>(null);
   const currentPositionRef = useRef<{ lng: number; lat: number } | null>(null);
@@ -165,7 +173,11 @@ export function BusMap() {
       }
 
       if (!busMarkerRef.current) {
-        busMarkerRef.current = new mapboxgl.Marker(buildBusMarker())
+        const markerElement = buildBusMarker();
+        busMarkerArrowRef.current = markerElement.querySelector(
+          "[data-bus-arrow]"
+        ) as HTMLSpanElement | null;
+        busMarkerRef.current = new mapboxgl.Marker(markerElement)
           .setLngLat([busLocation.lng, busLocation.lat])
           .addTo(map);
         currentPositionRef.current = { lng: busLocation.lng, lat: busLocation.lat };
@@ -203,6 +215,9 @@ export function BusMap() {
         const lat = start.lat + (target.lat - start.lat) * eased;
 
         busMarkerRef.current.setLngLat([lng, lat]);
+        if (busMarkerArrowRef.current && typeof busLocation.heading === "number") {
+          busMarkerArrowRef.current.style.transform = `rotate(${busLocation.heading}deg)`;
+        }
         currentPositionRef.current = { lng, lat };
 
         if (progress < 1) {
