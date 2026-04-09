@@ -43,7 +43,9 @@ export function BusMap() {
   const busMarkerRef = useRef<Marker | null>(null);
   const stopsMarkersRef = useRef<Marker[]>([]);
   const animationRef = useRef<number | null>(null);
-  const lastMoveRef = useRef<{ lng: number; lat: number; ts: number } | null>(null);
+  const currentPositionRef = useRef<{ lng: number; lat: number } | null>(null);
+  const targetPositionRef = useRef<{ lng: number; lat: number } | null>(null);
+  const animationStartRef = useRef<number | null>(null);
 
   const { routeGeoJson, stops, busLocation, nextStop } = useBusStore();
   const hasToken = useMemo(() => Boolean(MAPBOX_TOKEN), []);
@@ -144,12 +146,21 @@ export function BusMap() {
       return;
     }
 
-    let isActive = true;
+    const map = mapRef.current;
+    const mapboxglPromise = import("mapbox-gl");
+    let disposed = false;
 
-    const updateMarker = async () => {
-      const mapboxgl = (await import("mapbox-gl")).default;
-      const map = mapRef.current;
-      if (!map || !isActive) {
+    const stopAnimation = () => {
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+
+    const animateTo = async () => {
+      const { default: mapboxgl } = await mapboxglPromise;
+
+      if (disposed || !mapRef.current) {
         return;
       }
 
@@ -157,57 +168,68 @@ export function BusMap() {
         busMarkerRef.current = new mapboxgl.Marker(buildBusMarker())
           .setLngLat([busLocation.lng, busLocation.lat])
           .addTo(map);
-        lastMoveRef.current = {
-          lng: busLocation.lng,
-          lat: busLocation.lat,
-          ts: Date.now(),
-        };
-      } else {
-        const prev = lastMoveRef.current;
-        const start = prev || {
-          lng: busLocation.lng,
-          lat: busLocation.lat,
-          ts: Date.now(),
-        };
-        const end = {
-          lng: busLocation.lng,
-          lat: busLocation.lat,
-          ts: Date.now(),
-        };
-
-        const duration = 1200;
-        const startTime = performance.now();
-
-        const step = (now: number) => {
-          const t = Math.min(1, (now - startTime) / duration);
-          const eased = t * (2 - t);
-          const lng = start.lng + (end.lng - start.lng) * eased;
-          const lat = start.lat + (end.lat - start.lat) * eased;
-          busMarkerRef.current?.setLngLat([lng, lat]);
-
-          if (t < 1) {
-            animationRef.current = requestAnimationFrame(step);
-          }
-        };
-
-        if (animationRef.current) {
-          cancelAnimationFrame(animationRef.current);
-        }
-        animationRef.current = requestAnimationFrame(step);
-        lastMoveRef.current = end;
+        currentPositionRef.current = { lng: busLocation.lng, lat: busLocation.lat };
+        targetPositionRef.current = { lng: busLocation.lng, lat: busLocation.lat };
+        animationStartRef.current = null;
+        return;
       }
 
-      map.easeTo({
-        center: [busLocation.lng, busLocation.lat],
-        duration: 1000,
-        zoom: Math.max(map.getZoom(), 14),
-      });
+      const start = currentPositionRef.current ?? {
+        lng: busLocation.lng,
+        lat: busLocation.lat,
+      };
+      const end = {
+        lng: busLocation.lng,
+        lat: busLocation.lat,
+      };
+
+      targetPositionRef.current = end;
+      animationStartRef.current = performance.now();
+
+      stopAnimation();
+
+      const duration = Math.max(700, Math.min(1600, 1200));
+      const easeOutCubic = (value: number) => 1 - Math.pow(1 - value, 3);
+
+      const tick = (now: number) => {
+        if (disposed || !busMarkerRef.current || !animationStartRef.current || !targetPositionRef.current) {
+          return;
+        }
+
+        const progress = Math.min(1, (now - animationStartRef.current) / duration);
+        const eased = easeOutCubic(progress);
+        const target = targetPositionRef.current;
+        const lng = start.lng + (target.lng - start.lng) * eased;
+        const lat = start.lat + (target.lat - start.lat) * eased;
+
+        busMarkerRef.current.setLngLat([lng, lat]);
+        currentPositionRef.current = { lng, lat };
+
+        if (progress < 1) {
+          animationRef.current = requestAnimationFrame(tick);
+          return;
+        }
+
+        currentPositionRef.current = target;
+        animationStartRef.current = null;
+        animationRef.current = null;
+
+        map.easeTo({
+          center: [target.lng, target.lat],
+          duration: 500,
+          essential: true,
+          zoom: Math.max(map.getZoom(), 14),
+        });
+      };
+
+      animationRef.current = requestAnimationFrame(tick);
     };
 
-    void updateMarker();
+    void animateTo();
 
     return () => {
-      isActive = false;
+      disposed = true;
+      stopAnimation();
     };
   }, [busLocation]);
 
