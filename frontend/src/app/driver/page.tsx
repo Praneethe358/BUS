@@ -8,12 +8,49 @@ import { sampleRoute, sampleStops } from "../../data/sampleRoute";
 
 export default function DriverPage() {
   const busId = "demo-bus-id"; // Replace with actual busId for this driver
-  const { setBusMeta, setRoute } = useBusStore();
+  const { setBusMeta, setRoute, setBusLocation } = useBusStore();
 
   useEffect(() => {
     setBusMeta({ busId, busNumber: "21A" });
     setRoute(sampleRoute, sampleStops);
   }, [busId, setBusMeta, setRoute]);
+
+  useEffect(() => {
+    let disposed = false;
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
+
+    const loadLatest = async () => {
+      try {
+        const response = await fetch(`${socketUrl}/bus/location/${busId}`);
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as {
+          location?: {
+            busId: string;
+            lat: number;
+            lng: number;
+            speed?: number;
+            heading?: number;
+            timestamp?: number;
+          } | null;
+        };
+
+        if (!disposed && data.location) {
+          setBusLocation(data.location);
+        }
+      } catch {
+        // Ignore transient failures in demo bootstrap path.
+      }
+    };
+
+    void loadLatest();
+
+    return () => {
+      disposed = true;
+    };
+  }, [busId, setBusLocation]);
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-white">

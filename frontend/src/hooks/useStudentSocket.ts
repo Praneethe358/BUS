@@ -24,6 +24,8 @@ type UseStudentSocketOptions = {
 };
 
 export const useStudentSocket = ({ busId }: UseStudentSocketOptions) => {
+  const socketUrl =
+    process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
   const token = useMemo(() => getAuthToken(), []);
   const { socket, status } = useSocket({
     token: token ?? undefined,
@@ -35,6 +37,106 @@ export const useStudentSocket = ({ busId }: UseStudentSocketOptions) => {
     lng: number;
     timestamp: number;
   } | null>(null);
+
+  const applyLocation = (payload: {
+    busId: string;
+    lat: number;
+    lng: number;
+    speed?: number;
+    heading?: number;
+    timestamp?: number;
+  }) => {
+    const timestamp =
+      typeof payload.timestamp === "number" ? payload.timestamp : Date.now();
+    const location = {
+      busId: payload.busId,
+      lat: payload.lat,
+      lng: payload.lng,
+      speed: payload.speed,
+      heading: payload.heading,
+      timestamp,
+    };
+
+    const lastLocation = lastLocationRef.current;
+    let nextStatus: "unknown" | "moving" | "stopped" = "unknown";
+    let etaMinutes: number | null = null;
+
+    if (lastLocation) {
+      const dist = distanceInMeters(lastLocation, location);
+      const dtSeconds = (timestamp - lastLocation.timestamp) / 1000;
+      const speedMps = dtSeconds > 0 ? dist / dtSeconds : undefined;
+
+      if (speedMps && speedMps > 0.5) {
+        nextStatus = "moving";
+        const next = findNextStop(stops, location);
+        if (next) {
+          const distToNext = distanceInMeters(location, {
+            lat: next.lat,
+            lng: next.lng,
+          });
+          etaMinutes = estimateEtaMinutes(distToNext, speedMps);
+          setNextStop(next);
+        }
+      } else {
+        nextStatus = "stopped";
+      }
+    }
+
+    setBusLocation(location);
+    setStatus(nextStatus);
+    setEta(etaMinutes);
+    lastLocationRef.current = {
+      lat: location.lat,
+      lng: location.lng,
+      timestamp,
+    };
+  };
+
+  useEffect(() => {
+    if (!busId) {
+      return;
+    }
+
+    let disposed = false;
+
+    const loadLatest = async () => {
+      try {
+        const response = await fetch(`${socketUrl}/bus/location/${busId}`);
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as {
+          location?: {
+            busId: string;
+            lat: number;
+            lng: number;
+            speed?: number;
+            heading?: number;
+            timestamp?: number;
+          } | null;
+        };
+
+        if (!disposed && data.location) {
+          applyLocation(data.location);
+        }
+      } catch {
+        // Ignore network failures in fallback path.
+      }
+    };
+
+    void loadLatest();
+    const interval = window.setInterval(() => {
+      if (status !== "connected") {
+        void loadLatest();
+      }
+    }, 5000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
+  }, [busId, socketUrl, status]);
 
   useEffect(() => {
     if (!socket || !busId) {
@@ -55,50 +157,7 @@ export const useStudentSocket = ({ busId }: UseStudentSocketOptions) => {
       heading?: number;
       timestamp?: number;
     }) => {
-      const timestamp =
-        typeof payload.timestamp === "number" ? payload.timestamp : Date.now();
-      const location = {
-        busId: payload.busId,
-        lat: payload.lat,
-        lng: payload.lng,
-        speed: payload.speed,
-        heading: payload.heading,
-        timestamp,
-      };
-
-      const lastLocation = lastLocationRef.current;
-      let status: "unknown" | "moving" | "stopped" = "unknown";
-      let etaMinutes: number | null = null;
-
-      if (lastLocation) {
-        const dist = distanceInMeters(lastLocation, location);
-        const dtSeconds = (timestamp - lastLocation.timestamp) / 1000;
-        const speedMps = dtSeconds > 0 ? dist / dtSeconds : undefined;
-
-        if (speedMps && speedMps > 0.5) {
-          status = "moving";
-          const next = findNextStop(stops, location);
-          if (next) {
-            const distToNext = distanceInMeters(location, {
-              lat: next.lat,
-              lng: next.lng,
-            });
-            etaMinutes = estimateEtaMinutes(distToNext, speedMps);
-            setNextStop(next);
-          }
-        } else {
-          status = "stopped";
-        }
-      }
-
-      setBusLocation(location);
-      setStatus(status);
-      setEta(etaMinutes);
-      lastLocationRef.current = {
-        lat: location.lat,
-        lng: location.lng,
-        timestamp,
-      };
+      applyLocation(payload);
     };
 
     typedSocket.on("connect", onConnect);
@@ -108,7 +167,7 @@ export const useStudentSocket = ({ busId }: UseStudentSocketOptions) => {
       typedSocket.off("connect", onConnect);
       typedSocket.off(SOCKET_EVENTS.RECEIVE_LOCATION, onReceive);
     };
-  }, [busId, socket, setBusLocation, setEta, setStatus, setNextStop, stops]);
+  }, [busId, socket]);
 
   return { socket, status };
 };

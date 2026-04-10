@@ -22,6 +22,8 @@ type DriverPayload = {
 };
 
 export const useDriverSocket = () => {
+  const socketUrl =
+    process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
   const token = useMemo(() => getAuthToken(), []);
   const { socket, status } = useSocket({
     token: token ?? undefined,
@@ -30,13 +32,23 @@ export const useDriverSocket = () => {
 
   const sendLocation = useCallback(
     (payload: DriverPayload) => {
+      void fetch(`${socketUrl}/bus/location`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      }).catch(() => {
+        // Keep UI resilient even if fallback persistence fails.
+      });
+
       if (!socket) {
         return;
       }
 
       socket.emit(SOCKET_EVENTS.SEND_LOCATION, payload);
     },
-    [socket]
+    [socket, socketUrl]
   );
 
   return { socket, status, sendLocation };

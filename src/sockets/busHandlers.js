@@ -1,10 +1,10 @@
 const { SOCKET_EVENTS } = require('./constants');
 const { ensureStudentForBus, ensureDriverForBus } = require('./security');
 const { distanceInMeters } = require('./distance');
+const { getLatestLocation, setLatestLocation } = require('./locationStore');
 
 const buildBusRoom = (busId) => `bus:${busId}`;
 
-const lastLocationCache = new Map(); // key: busId, value: { lat, lng, ts }
 const MIN_MOVE_METERS = 10;
 const MIN_INTERVAL_MS = 2000;
 
@@ -54,9 +54,8 @@ const registerBusHandlers = (io, socket) => {
       return;
     }
 
-    const key = payload.busId.toString();
     const now = Date.now();
-    const prev = lastLocationCache.get(key);
+    const prev = getLatestLocation(payload.busId);
 
     if (prev) {
       const moved = distanceInMeters(prev.lat, prev.lng, payload.lat, payload.lng);
@@ -68,8 +67,6 @@ const registerBusHandlers = (io, socket) => {
       }
     }
 
-    lastLocationCache.set(key, { lat: payload.lat, lng: payload.lng, ts: now });
-
     const room = buildBusRoom(payload.busId);
     const location = {
       busId: payload.busId,
@@ -80,6 +77,8 @@ const registerBusHandlers = (io, socket) => {
       timestamp: typeof payload.timestamp === 'number' ? payload.timestamp : now,
       driverId: socket.user._id,
     };
+
+    setLatestLocation(payload.busId, location);
 
     io.to(room).emit(SOCKET_EVENTS.RECEIVE_LOCATION, location);
   });

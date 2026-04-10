@@ -1,11 +1,20 @@
 const express = require('express');
 const { body } = require('express-validator');
 
-const { createBus, assignStudentToBus } = require('../controllers/busController');
+const {
+  createBus,
+  assignStudentToBus,
+  getLatestBusLocation,
+  updateLatestBusLocation,
+} = require('../controllers/busController');
 const { auth, authorizeRoles } = require('../middleware/authMiddleware');
 const validate = require('../middleware/validationMiddleware');
 
 const router = express.Router();
+
+// Public latest-location endpoints for realtime UI bootstrap/fallback
+router.get('/location/:busId', getLatestBusLocation);
+router.post('/location', updateLatestBusLocation);
 
 // Admin-only routes
 router.post(
