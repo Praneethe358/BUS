@@ -4,6 +4,16 @@ const asyncHandler = require('../utils/asyncHandler');
 const { ApiError } = require('../middleware/errorMiddleware');
 const { getLatestLocation, setLatestLocation } = require('../sockets/locationStore');
 
+// GET /bus/list
+const listBuses = asyncHandler(async (req, res) => {
+  const buses = await Bus.find({}).sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    buses,
+  });
+});
+
 // POST /bus/create (admin only)
 const createBus = asyncHandler(async (req, res, next) => {
   const { busNumber, routeName, stops } = req.body;
@@ -99,6 +109,7 @@ const updateLatestBusLocation = asyncHandler(async (req, res, next) => {
 });
 
 module.exports = {
+  listBuses,
   createBus,
   assignStudentToBus,
   getLatestBusLocation,

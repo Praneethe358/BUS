@@ -1,4 +1,5 @@
 const asyncHandler = require('../utils/asyncHandler');
+const User = require('../models/userModel');
 
 // GET /users/me
 const getMe = asyncHandler(async (req, res) => {
@@ -17,4 +18,16 @@ const getMe = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { getMe };
+// GET /users/students
+const listStudents = asyncHandler(async (req, res) => {
+  const students = await User.find({ role: 'student' })
+    .select('_id name regNo email busId')
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    students,
+  });
+});
+
+module.exports = { getMe, listStudents };

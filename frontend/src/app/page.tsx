@@ -32,7 +32,7 @@ export default function Home() {
             </h1>
             <p className="max-w-xl text-sm text-slate-300 sm:text-base">
               Students get live ETAs and stop info; drivers share their
-              location with a single tap. Built with Mapbox, Socket.IO and a
+              location with a single tap. Built with Leaflet, Socket.IO and a
               modern Next.js UI.
             </p>
             <div className="flex flex-wrap gap-3">
@@ -47,6 +47,12 @@ export default function Home() {
                 className="inline-flex items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/40 px-5 py-3 text-sm font-medium text-slate-50 backdrop-blur transition hover:border-slate-500 hover:bg-slate-900/80"
               >
                 Open driver view
+              </Link>
+              <Link
+                href="/admin"
+                className="inline-flex items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/10 px-5 py-3 text-sm font-medium text-amber-200 transition hover:bg-amber-500/20"
+              >
+                Open admin panel
               </Link>
             </div>
           </div>
