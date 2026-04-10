@@ -10,7 +10,7 @@ import { sampleRoute, sampleStops } from "../../data/sampleRoute";
 export default function StudentPage() {
   const busId = "demo-bus-id";
 
-  const { busNumber, etaMinutes, status, nextStop, setBusMeta, setRoute, stops } =
+  const { busNumber, etaMinutes, status, nextStop, busLocation, setBusMeta, setRoute, stops } =
     useBusStore();
 
   useStudentSocket({ busId });
@@ -191,6 +191,44 @@ export default function StudentPage() {
               </article>
             </div>
           </div>
+        </section>
+
+        <section className="grid gap-3 rounded-3xl border border-white/10 bg-slate-950/70 p-4 shadow-[0_18px_60px_rgba(2,6,23,0.45)] sm:grid-cols-2 lg:grid-cols-4">
+          <article className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Bus</p>
+            <p className="mt-2 text-xl font-semibold text-white">{busNumber || "21A"}</p>
+            <p className="mt-1 text-sm text-slate-400">{routeLabel}</p>
+          </article>
+
+          <article className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Current position</p>
+            <p className="mt-2 text-sm font-medium text-white">
+              {busLocation
+                ? `${busLocation.lat.toFixed(5)}, ${busLocation.lng.toFixed(5)}`
+                : "Waiting for first update"}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              {busLocation?.timestamp
+                ? `Updated ${new Date(busLocation.timestamp).toLocaleTimeString()}`
+                : "No timestamp yet"}
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Motion</p>
+            <p className="mt-2 text-sm font-medium capitalize text-white">{status}</p>
+            <p className="mt-1 text-xs text-slate-400">
+              {typeof busLocation?.speed === "number"
+                ? `Speed: ${busLocation.speed.toFixed(1)} m/s`
+                : "Speed unavailable"}
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Next stop</p>
+            <p className="mt-2 text-sm font-medium text-white">{nextStop?.name || "Waiting for bus"}</p>
+            <p className="mt-1 text-xs text-slate-400">ETA: {formatEta(etaMinutes)}</p>
+          </article>
         </section>
       </main>
     </div>

@@ -1,125 +1,128 @@
-# BUS
+# Smart Bus Tracking System
 
-## Driver realtime client (Next.js)
+Real-time bus tracking platform with driver and student views.
 
-Install the Socket.IO client in your frontend app:
+## Tech Stack
+
+- Backend: Node.js, Express, Socket.IO, MongoDB
+- Frontend: Next.js, Leaflet, Zustand, Socket.IO client
+
+## Workflow (Up to Phase 3)
+
+### Phase 1: Backend Foundation
+
+Goal: Build the core backend for APIs and realtime communication.
+
+What is implemented:
+
+1. Project setup with Express app and modular structure under `src/`
+2. MongoDB connection and models for users and buses
+3. REST APIs for auth, users, and bus management
+4. Socket.IO server setup with JWT handshake auth
+5. Realtime events:
+   - `joinBus`
+   - `sendLocation`
+   - `receiveLocation`
+
+Output:
+
+- Backend server running
+- APIs working
+- Realtime socket layer available
+
+### Phase 2: Driver Tracking System
+
+Goal: Let drivers broadcast live location.
+
+What is implemented:
+
+1. Driver page with start/stop location sharing controls
+2. Geolocation tracking via `navigator.geolocation.watchPosition()`
+3. Payload streaming with `lat`, `lng`, `speed`, `heading`, `timestamp`
+4. Socket emit to backend using `sendLocation`
+5. Throttled updates and location permission/error handling
+
+Output:
+
+- Driver can start/stop tracking
+- Live location is sent to backend
+- Realtime updates are available to subscribers
+
+### Phase 3: Frontend Live Map + Tracking
+
+Goal: Show moving bus, route, and stops in realtime.
+
+What is implemented:
+
+1. Map integration using Leaflet + OpenStreetMap tiles
+2. Student view with:
+   - live bus marker
+   - route polyline
+   - stop markers
+   - auto-follow behavior
+3. Realtime updates through Socket.IO `receiveLocation`
+4. Zustand state for:
+   - `busLocation`
+   - `routeGeoJson`
+   - `stops`
+   - `etaMinutes`
+5. Driver view integrated with map and sharing controls
+6. UI layer includes floating info card and responsive layout
+7. Smooth marker movement using interpolation and `requestAnimationFrame`
+8. Fallback persistence added:
+   - latest location REST endpoint (`GET /bus/location/:busId`)
+   - driver writes latest location (`POST /bus/location`)
+   - student refresh/poll fallback when socket auth is unavailable
+
+Output:
+
+- Live map with moving bus
+- Driver and student tracking views
+- Smooth animation
+- Refresh-safe location behavior
+
+## Realtime Data Flow
+
+Driver phone GPS
+-> Driver frontend emits location
+-> Backend Socket.IO server validates and broadcasts
+-> Student frontend receives and updates map state
+
+Fallback path:
+
+Driver frontend persists latest location through REST
+-> Student frontend fetches/polls latest location on refresh/disconnect
+
+## Current Status
+
+- Phase 1 complete
+- Phase 2 complete
+- Phase 3 complete
+- Admin UI panel not implemented yet (admin APIs exist)
+
+## Available Admin APIs
+
+- `POST /bus/create` (admin)
+- `POST /bus/assign-student` (admin)
+
+## Local Run
+
+Backend:
 
 ```bash
-npm install socket.io-client
+npm run dev
 ```
 
-Use this client component to emit `sendLocation` every 3 seconds:
+Frontend:
 
-```tsx
-'use client';
-
-import { useEffect, useRef, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
-
-type DriverTrackerProps = {
-	busId: string;
-	token: string; // JWT from your auth API
-	socketUrl?: string; // e.g. 'http://localhost:5000'
-};
-
-export default function DriverTracker({ busId, token, socketUrl }: DriverTrackerProps) {
-	const socketRef = useRef<Socket | null>(null);
-	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const [status, setStatus] = useState('disconnected');
-
-	useEffect(() => {
-		if (!busId || !token) return;
-
-		const socket = io(socketUrl || '/', {
-			auth: { token },
-			transports: ['websocket'],
-			reconnection: true,
-			reconnectionAttempts: Infinity,
-			reconnectionDelay: 1000,
-			reconnectionDelayMax: 5000,
-		});
-
-		socketRef.current = socket;
-
-		socket.on('connect', () => setStatus('connected'));
-		socket.on('disconnect', () => setStatus('disconnected'));
-		socket.on('connect_error', () => setStatus('error'));
-
-		const sendLocationOnce = () => {
-			if (!navigator.geolocation) {
-				setStatus('geolocation_not_supported');
-				return;
-			}
-
-			navigator.geolocation.getCurrentPosition(
-				(pos) => {
-					const { latitude, longitude } = pos.coords;
-					socket.emit('sendLocation', {
-						busId,
-						lat: latitude,
-						lng: longitude,
-					});
-				},
-				() => {
-					setStatus('geolocation_error');
-				},
-				{ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-			);
-		};
-
-		sendLocationOnce();
-		timerRef.current = setInterval(sendLocationOnce, 3000);
-
-		return () => {
-			if (timerRef.current) clearInterval(timerRef.current);
-			socket.disconnect();
-			socketRef.current = null;
-		};
-	}, [busId, token, socketUrl]);
-
-	return <p>Socket status: {status}</p>;
-}
+```bash
+npm --prefix frontend run dev
 ```
 
-	## Socket.IO security and usage
+Student view: `http://localhost:3000/student`
 
-	### Authentication (handshake)
+Driver view: `http://localhost:3000/driver`
 
-	- The backend uses JWT on the Socket.IO handshake.
-	- Clients must pass the token as:
-		- `auth: { token: '<JWT>' }` when calling `io(SERVER_URL, { auth })`.
-	- On the server side (already implemented in `src/sockets/index.js`):
-		- The token is verified with `JWT_SECRET`.
-		- The user is loaded from MongoDB and attached as `socket.user`.
-		- Connections without a valid token are rejected.
+## Viva One-liner
 
-	### Driver: sendLocation (secured)
-
-	- Only users with `role: 'driver'` may emit `sendLocation`.
-	- The driver must be assigned a `busId` in the database.
-	- On `sendLocation`:
-		- Server checks `socket.user.role === 'driver'`.
-		- Server checks `socket.user.busId === payload.busId`.
-		- Valid payload is broadcast to room `bus:<busId>` via `receiveLocation`.
-
-	### Student: joinBus (secured)
-
-	- Only users with `role: 'student'` may join a bus room.
-	- The student must be assigned a `busId` in the database.
-	- Client emits `joinBus` with `{ busId }`.
-	- On `joinBus`:
-		- Server checks `socket.user.role === 'student'`.
-		- Server checks `socket.user.busId === busId`.
-		- If authorized, socket joins room `bus:<busId>` and receives `joinedBus`.
-
-	### Rooms and events
-
-	- Each bus has a dedicated room: `bus:<busId>`.
-	- Events:
-		- `joinBus` → student asks to join their bus room.
-		- `joinedBus` → server confirms student joined the room.
-		- `sendLocation` → driver sends GPS updates.
-		- `receiveLocation` → server broadcasts bus location to all students in that bus room.
-		- `error` → server sends security/validation errors for unauthorized or invalid actions.
-
-	This ensures only authenticated drivers can publish locations for their bus, and only authenticated students subscribed to that same bus receive those updates.
+"Driver shares live GPS, backend streams it via sockets, and frontend updates the map in realtime with route, stops, and ETA."
