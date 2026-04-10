@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "mapbox-gl/dist/mapbox-gl.css";
 
 :root {
   --background: #ffffff;
@@ -26,7 +25,7 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-.mapboxgl-canvas {
+.leaflet-container {
   outline: none;
 }
 

@@ -51,11 +51,11 @@ export default function StudentPage() {
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 pb-6 pt-2 sm:px-6 lg:px-8 lg:pb-8">
         <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/70 shadow-[0_24px_90px_rgba(2,6,23,0.45)] ring-1 ring-white/5">
           <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-transparent to-emerald-400/10" />
-          <div className="relative h-[74vh] min-h-[560px] w-full lg:h-[78vh]">
+          <div className="relative z-0 h-[74vh] min-h-[560px] w-full lg:h-[78vh]">
             <BusMap />
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-3 pb-3 sm:px-4 sm:pb-4 lg:px-6 lg:pb-6">
-              <article className="pointer-events-auto w-full max-w-3xl rounded-[1.75rem] border border-white/10 bg-slate-950/85 p-4 shadow-[0_18px_70px_rgba(2,6,23,0.55)] backdrop-blur-xl transition duration-300 ease-out animate-[floatUp_400ms_ease-out] sm:p-5">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1200] flex justify-center px-3 pb-3 sm:px-4 sm:pb-4 lg:px-6 lg:pb-6">
+              <article className="pointer-events-auto w-full max-w-3xl rounded-[1.75rem] border border-white/15 bg-slate-950/96 p-4 shadow-[0_18px_70px_rgba(2,6,23,0.7)] backdrop-blur-xl transition duration-300 ease-out animate-[floatUp_400ms_ease-out] sm:p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2">

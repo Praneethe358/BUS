@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import type { GeoJSONSource, Map, Marker } from "mapbox-gl";
+import { useEffect, useRef } from "react";
+import type { DivIcon, LatLngTuple, Map as LeafletMap, Marker, Polyline } from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { useBusStore, type Stop } from "../../store/busStore";
-
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+import { useState } from "react";
 
 const buildStopMarker = (stop: Stop) => {
   const el = document.createElement("div");
@@ -46,89 +46,49 @@ const buildBusMarker = () => {
 
 export function BusMap() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<Map | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const mapRef = useRef<LeafletMap | null>(null);
   const busMarkerRef = useRef<Marker | null>(null);
   const busMarkerArrowRef = useRef<HTMLSpanElement | null>(null);
   const stopsMarkersRef = useRef<Marker[]>([]);
+  const routeLineRef = useRef<Polyline | null>(null);
+  const routeGlowRef = useRef<Polyline | null>(null);
   const animationRef = useRef<number | null>(null);
   const currentPositionRef = useRef<{ lng: number; lat: number } | null>(null);
   const targetPositionRef = useRef<{ lng: number; lat: number } | null>(null);
   const animationStartRef = useRef<number | null>(null);
 
   const { routeGeoJson, stops, busLocation, nextStop } = useBusStore();
-  const hasToken = useMemo(() => Boolean(MAPBOX_TOKEN), []);
 
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current || !hasToken) {
+    if (!mapContainerRef.current || mapRef.current) {
       return;
     }
 
     let cancelled = false;
 
     const init = async () => {
-      const mapboxgl = (await import("mapbox-gl")).default;
-      mapboxgl.accessToken = MAPBOX_TOKEN || "";
+      const L = await import("leaflet");
 
       if (cancelled) {
         return;
       }
 
-      const map = new mapboxgl.Map({
-        container: mapContainerRef.current!,
-        style: "mapbox://styles/mapbox/streets-v12",
-        center: [77.5946, 12.9716],
-        zoom: 13,
-        pitch: 45,
-        bearing: -12,
-        antialias: true,
-      });
+      const map = L.map(mapContainerRef.current!, {
+        zoomControl: true,
+      }).setView([12.9716, 77.5946], 13);
 
-      map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(map);
+
       mapRef.current = map;
-
-      map.on("load", () => {
-        if (routeGeoJson) {
-          map.addSource("route", {
-            type: "geojson",
-            data: routeGeoJson,
-          });
-
-          map.addLayer({
-            id: "route-line",
-            type: "line",
-            source: "route",
-            layout: {
-              "line-cap": "round",
-              "line-join": "round",
-            },
-            paint: {
-              "line-color": "#38bdf8",
-              "line-width": 5,
-              "line-opacity": 0.9,
-            },
-          });
-
-          map.addLayer({
-            id: "route-glow",
-            type: "line",
-            source: "route",
-            paint: {
-              "line-color": "#38bdf8",
-              "line-width": 12,
-              "line-opacity": 0.15,
-            },
-          });
-        }
-
-        if (stops.length > 0 && stopsMarkersRef.current.length === 0) {
-          stopsMarkersRef.current = stops.map((stop: Stop) => {
-            const marker = new mapboxgl.Marker(buildStopMarker(stop))
-              .setLngLat([stop.lng, stop.lat])
-              .addTo(map);
-            return marker;
-          });
-        }
-      });
+      setMapReady(true);
+      // Leaflet can initialize before container layout settles; invalidate to prevent blank/offset tiles.
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 0);
     };
 
     void init();
@@ -143,19 +103,22 @@ export function BusMap() {
         mapRef.current.remove();
         mapRef.current = null;
       }
+      setMapReady(false);
       stopsMarkersRef.current.forEach((marker) => marker.remove());
       stopsMarkersRef.current = [];
+      routeLineRef.current = null;
+      routeGlowRef.current = null;
       busMarkerRef.current = null;
     };
-  }, [hasToken, routeGeoJson, stops]);
+  }, []);
 
   useEffect(() => {
-    if (!mapRef.current || !busLocation) {
+    if (!mapReady || !mapRef.current || !busLocation) {
       return;
     }
 
     const map = mapRef.current;
-    const mapboxglPromise = import("mapbox-gl");
+    const leafletPromise = import("leaflet");
     let disposed = false;
 
     const stopAnimation = () => {
@@ -166,7 +129,7 @@ export function BusMap() {
     };
 
     const animateTo = async () => {
-      const { default: mapboxgl } = await mapboxglPromise;
+      const L = await leafletPromise;
 
       if (disposed || !mapRef.current) {
         return;
@@ -177,8 +140,17 @@ export function BusMap() {
         busMarkerArrowRef.current = markerElement.querySelector(
           "[data-bus-arrow]"
         ) as HTMLSpanElement | null;
-        busMarkerRef.current = new mapboxgl.Marker(markerElement)
-          .setLngLat([busLocation.lng, busLocation.lat])
+        const icon: DivIcon = L.divIcon({
+          className: "leaflet-bus-marker",
+          html: markerElement,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+
+        busMarkerRef.current = L.marker([busLocation.lat, busLocation.lng], {
+          icon,
+          interactive: false,
+        })
           .addTo(map);
         currentPositionRef.current = { lng: busLocation.lng, lat: busLocation.lat };
         targetPositionRef.current = { lng: busLocation.lng, lat: busLocation.lat };
@@ -214,7 +186,7 @@ export function BusMap() {
         const lng = start.lng + (target.lng - start.lng) * eased;
         const lat = start.lat + (target.lat - start.lat) * eased;
 
-        busMarkerRef.current.setLngLat([lng, lat]);
+        busMarkerRef.current.setLatLng([lat, lng]);
         if (busMarkerArrowRef.current && typeof busLocation.heading === "number") {
           busMarkerArrowRef.current.style.transform = `rotate(${busLocation.heading}deg)`;
         }
@@ -229,12 +201,13 @@ export function BusMap() {
         animationStartRef.current = null;
         animationRef.current = null;
 
-        map.easeTo({
-          center: [target.lng, target.lat],
-          duration: 500,
-          essential: true,
-          zoom: Math.max(map.getZoom(), 14),
+        map.panTo([target.lat, target.lng], {
+          animate: true,
+          duration: 0.5,
         });
+        if (map.getZoom() < 14) {
+          map.setZoom(14, { animate: true });
+        }
       };
 
       animationRef.current = requestAnimationFrame(tick);
@@ -246,58 +219,60 @@ export function BusMap() {
       disposed = true;
       stopAnimation();
     };
-  }, [busLocation]);
+  }, [busLocation, mapReady]);
 
   useEffect(() => {
-    if (!mapRef.current || !routeGeoJson) {
+    if (!mapReady || !mapRef.current || !routeGeoJson) {
       return;
     }
 
     const map = mapRef.current;
-    const source = map.getSource("route") as GeoJSONSource | undefined;
-    if (source) {
-      source.setData(routeGeoJson);
-      return;
+    const points = routeGeoJson.geometry.coordinates.map(
+      ([lng, lat]) => [lat, lng] as LatLngTuple
+    );
+
+    if (routeGlowRef.current) {
+      routeGlowRef.current.setLatLngs(points);
+    }
+    if (routeLineRef.current) {
+      routeLineRef.current.setLatLngs(points);
     }
 
-    if (!map.isStyleLoaded()) {
-      return;
+    if (!routeGlowRef.current || !routeLineRef.current) {
+      import("leaflet").then((L) => {
+        if (!mapRef.current) {
+          return;
+        }
+
+        routeGlowRef.current?.remove();
+        routeLineRef.current?.remove();
+
+        routeGlowRef.current = L.polyline(points, {
+          color: "#38bdf8",
+          weight: 12,
+          opacity: 0.15,
+          lineCap: "round",
+          lineJoin: "round",
+        }).addTo(map);
+
+        routeLineRef.current = L.polyline(points, {
+          color: "#38bdf8",
+          weight: 5,
+          opacity: 0.9,
+          lineCap: "round",
+          lineJoin: "round",
+        }).addTo(map);
+
+        const bounds = routeLineRef.current.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
+        }
+      });
     }
-
-    map.addSource("route", {
-      type: "geojson",
-      data: routeGeoJson,
-    });
-
-    map.addLayer({
-      id: "route-line",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-cap": "round",
-        "line-join": "round",
-      },
-      paint: {
-        "line-color": "#38bdf8",
-        "line-width": 5,
-        "line-opacity": 0.9,
-      },
-    });
-
-    map.addLayer({
-      id: "route-glow",
-      type: "line",
-      source: "route",
-      paint: {
-        "line-color": "#38bdf8",
-        "line-width": 12,
-        "line-opacity": 0.15,
-      },
-    });
-  }, [routeGeoJson]);
+  }, [routeGeoJson, mapReady]);
 
   useEffect(() => {
-    if (!mapRef.current) {
+    if (!mapReady || !mapRef.current) {
       return;
     }
 
@@ -309,16 +284,33 @@ export function BusMap() {
     }
 
     const map = mapRef.current;
-    const mapboxglPromise = import("mapbox-gl");
-    mapboxglPromise.then(({ default: mapboxgl }) => {
+    const leafletPromise = import("leaflet");
+    leafletPromise.then((L) => {
       stopsMarkersRef.current = stops.map((stop: Stop) => {
-        const marker = new mapboxgl.Marker(buildStopMarker(stop))
-          .setLngLat([stop.lng, stop.lat])
-          .addTo(map);
+        const icon: DivIcon = L.divIcon({
+          className: "leaflet-stop-marker",
+          html: buildStopMarker(stop),
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        });
+
+        const marker = L.marker([stop.lat, stop.lng], {
+          icon,
+          interactive: false,
+        }).addTo(map);
+
         return marker;
       });
+
+      if (!routeGeoJson) {
+        const allPoints = stops.map((stop) => [stop.lat, stop.lng] as LatLngTuple);
+        const bounds = L.latLngBounds(allPoints);
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
+        }
+      }
     });
-  }, [stops]);
+  }, [stops, routeGeoJson, mapReady]);
 
   useEffect(() => {
     if (!nextStop) {
@@ -327,20 +319,15 @@ export function BusMap() {
 
     stopsMarkersRef.current.forEach((marker) => {
       const el = marker.getElement();
+      if (!el) {
+        return;
+      }
       const isNext = el.getAttribute("data-stop-id") === nextStop.id;
       el.classList.toggle("ring-2", isNext);
       el.classList.toggle("ring-emerald-400", isNext);
       el.classList.toggle("scale-110", isNext);
     });
   }, [nextStop]);
-
-  if (!hasToken) {
-    return (
-      <div className="flex h-full w-full items-center justify-center text-sm text-red-500">
-        Mapbox token missing. Set NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN.
-      </div>
-    );
-  }
 
   return <div ref={mapContainerRef} className="h-full w-full rounded-3xl" />;
 }
