@@ -52,6 +52,10 @@ export interface BusState {
   // Offline queue for unsent locations
   offlineLocationQueue: BusLocation[];
   
+  // Notification tracking
+  stopNotifications: Record<string, boolean>; // stopId -> notified
+  lastNotificationTime: number;
+  
   // Actions
   setBusMeta: (payload: { busId: string; busNumber?: string | null }) => void;
   setRoute: (route: Feature<LineString> | null, stops: Stop[]) => void;
@@ -72,6 +76,10 @@ export interface BusState {
   getOfflineQueue: () => BusLocation[];
   persistToLocalStorage: () => void;
   restoreFromLocalStorage: () => void;
+  setStopNotified: (stopId: string, notified: boolean) => void;
+  isStopNotified: (stopId: string) => boolean;
+  clearStopNotifications: () => void;
+  recordNotificationTime: () => void;
 }
 
 const storeCreator: StateCreator<BusState> = (set, get) => ({
@@ -93,6 +101,8 @@ const storeCreator: StateCreator<BusState> = (set, get) => ({
   stopArrivalAlerts: {},
   locationHistory: [],
   offlineLocationQueue: [],
+  stopNotifications: {},
+  lastNotificationTime: 0,
   setBusMeta: ({ busId, busNumber = null }: { busId: string; busNumber?: string | null }) =>
     set(() => ({ busId, busNumber })),
   setRoute: (route: Feature<LineString> | null, stops: Stop[]) =>
@@ -162,6 +172,15 @@ const storeCreator: StateCreator<BusState> = (set, get) => ({
       console.error('Failed to restore store from localStorage:', error);
     }
   },
+  setStopNotified: (stopId: string, notified: boolean) => set((state) => ({
+    stopNotifications: {
+      ...state.stopNotifications,
+      [stopId]: notified,
+    },
+  })),
+  isStopNotified: (stopId: string) => get().stopNotifications[stopId] ?? false,
+  clearStopNotifications: () => set(() => ({ stopNotifications: {} })),
+  recordNotificationTime: () => set(() => ({ lastNotificationTime: Date.now() })),
 });
 
 export const useBusStore = create<BusState>(storeCreator);
