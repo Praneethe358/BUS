@@ -80,4 +80,12 @@ const busSchema = new mongoose.Schema(
   }
 );
 
+// Create indexes for performance optimization
+busSchema.index({ driverId: 1 });
+busSchema.index({ isActive: 1 });
+busSchema.index({ createdBy: 1 });
+busSchema.index({ lastLocationTimestamp: 1 });
+busSchema.index({ status: 1 });
+busSchema.index({ busNumber: 1 });
+
 module.exports = mongoose.model('Bus', busSchema);

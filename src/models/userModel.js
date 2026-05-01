@@ -93,4 +93,13 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+// Create indexes for performance optimization
+userSchema.index({ role: 1 });
+userSchema.index({ assignedBus: 1 });
+userSchema.index({ busId: 1 });
+userSchema.index({ isOnline: 1 });
+userSchema.index({ driverId: 1 });
+userSchema.index({ email: 1 });
+userSchema.index({ role: 1, assignedBus: 1 }); // Compound index for driver queries
+
 module.exports = mongoose.model('User', userSchema);
