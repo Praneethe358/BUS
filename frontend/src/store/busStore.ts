@@ -59,6 +59,11 @@ export interface BusState {
   addLocationToHistory: (location: BusLocation) => void;
   clearOldLocations: (maxAge: number) => void;
   getLocationHistory: () => BusLocation[];
+  setDriverInfo: (driverId: string | null) => void;
+  updateDriverStatus: (status: DriverStatus) => void;
+  setIsSharing: (isSharing: boolean) => void;
+  updateConnectedStudents: (count: number) => void;
+  setIsOnline: (isOnline: boolean) => void;
 }
 
 const storeCreator: StateCreator<BusState> = (set, get) => ({
@@ -106,6 +111,11 @@ const storeCreator: StateCreator<BusState> = (set, get) => ({
     };
   }),
   getLocationHistory: () => get().locationHistory,
+  setDriverInfo: (driverId: string | null) => set(() => ({ driverId })),
+  updateDriverStatus: (status: DriverStatus) => set(() => ({ driverStatus: status })),
+  setIsSharing: (isSharing: boolean) => set(() => ({ isSharing })),
+  updateConnectedStudents: (count: number) => set(() => ({ connectedStudentCount: count })),
+  setIsOnline: (isOnline: boolean) => set(() => ({ isOnline })),
 });
 
 export const useBusStore = create<BusState>(storeCreator);
