@@ -2,6 +2,7 @@ import { create, type StateCreator } from "zustand";
 import type { Feature, LineString } from "geojson";
 
 export type BusStatus = "unknown" | "moving" | "stopped";
+export type DriverStatus = "online" | "offline" | "idle";
 
 export interface BusLocation {
   busId?: string;
@@ -21,14 +22,31 @@ export interface Stop {
 }
 
 export interface BusState {
+  // Basic bus data
   busId: string | null;
   busNumber: string | null;
+  
+  // Route and location data
   routeGeoJson: Feature<LineString> | null;
   stops: Stop[];
   busLocation: BusLocation | null;
   etaMinutes: number | null;
   status: BusStatus;
   nextStop: Stop | null;
+  
+  // Driver information
+  driverId: string | null;
+  driverStatus: DriverStatus;
+  isSharing: boolean;
+  connectedStudentCount: number;
+  
+  // Status tracking
+  isOnline: boolean;
+  routeUpdateTimestamp: number;
+  lastLocationReceived: number;
+  stopArrivalAlerts: Record<string, boolean>;
+  
+  // Actions
   setBusMeta: (payload: { busId: string; busNumber?: string | null }) => void;
   setRoute: (route: Feature<LineString> | null, stops: Stop[]) => void;
   setBusLocation: (location: BusLocation | null) => void;
@@ -46,14 +64,26 @@ const storeCreator: StateCreator<BusState> = (set) => ({
   etaMinutes: null,
   status: "unknown",
   nextStop: null,
+  driverId: null,
+  driverStatus: "offline",
+  isSharing: false,
+  connectedStudentCount: 0,
+  isOnline: false,
+  routeUpdateTimestamp: 0,
+  lastLocationReceived: 0,
+  stopArrivalAlerts: {},
   setBusMeta: ({ busId, busNumber = null }: { busId: string; busNumber?: string | null }) =>
     set(() => ({ busId, busNumber })),
   setRoute: (route: Feature<LineString> | null, stops: Stop[]) =>
     set(() => ({
       routeGeoJson: route,
       stops,
+      routeUpdateTimestamp: Date.now(),
     })),
-  setBusLocation: (location: BusLocation | null) => set(() => ({ busLocation: location })),
+  setBusLocation: (location: BusLocation | null) => set(() => ({ 
+    busLocation: location,
+    lastLocationReceived: Date.now(),
+  })),
   setEta: (etaMinutes: number | null) => set(() => ({ etaMinutes })),
   setStatus: (status: BusStatus) => set(() => ({ status })),
   setNextStop: (stop: Stop | null) => set(() => ({ nextStop: stop })),
