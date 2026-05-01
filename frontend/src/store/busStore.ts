@@ -49,6 +49,9 @@ export interface BusState {
   // Location history (max 100 recent locations for tracking)
   locationHistory: BusLocation[];
   
+  // Offline queue for unsent locations
+  offlineLocationQueue: BusLocation[];
+  
   // Actions
   setBusMeta: (payload: { busId: string; busNumber?: string | null }) => void;
   setRoute: (route: Feature<LineString> | null, stops: Stop[]) => void;
@@ -64,6 +67,11 @@ export interface BusState {
   setIsSharing: (isSharing: boolean) => void;
   updateConnectedStudents: (count: number) => void;
   setIsOnline: (isOnline: boolean) => void;
+  addToOfflineQueue: (location: BusLocation) => void;
+  clearOfflineQueue: () => void;
+  getOfflineQueue: () => BusLocation[];
+  persistToLocalStorage: () => void;
+  restoreFromLocalStorage: () => void;
 }
 
 const storeCreator: StateCreator<BusState> = (set, get) => ({
@@ -84,6 +92,7 @@ const storeCreator: StateCreator<BusState> = (set, get) => ({
   lastLocationReceived: 0,
   stopArrivalAlerts: {},
   locationHistory: [],
+  offlineLocationQueue: [],
   setBusMeta: ({ busId, busNumber = null }: { busId: string; busNumber?: string | null }) =>
     set(() => ({ busId, busNumber })),
   setRoute: (route: Feature<LineString> | null, stops: Stop[]) =>
@@ -116,6 +125,43 @@ const storeCreator: StateCreator<BusState> = (set, get) => ({
   setIsSharing: (isSharing: boolean) => set(() => ({ isSharing })),
   updateConnectedStudents: (count: number) => set(() => ({ connectedStudentCount: count })),
   setIsOnline: (isOnline: boolean) => set(() => ({ isOnline })),
+  addToOfflineQueue: (location: BusLocation) => set((state) => ({
+    offlineLocationQueue: [...state.offlineLocationQueue, location].slice(-50), // Keep last 50 queued locations
+  })),
+  clearOfflineQueue: () => set(() => ({ offlineLocationQueue: [] })),
+  getOfflineQueue: () => get().offlineLocationQueue,
+  persistToLocalStorage: () => {
+    const state = get();
+    const persistData = {
+      busId: state.busId,
+      driverId: state.driverId,
+      isSharing: state.isSharing,
+      offlineLocationQueue: state.offlineLocationQueue,
+      locationHistory: state.locationHistory,
+    };
+    try {
+      localStorage.setItem('busStore', JSON.stringify(persistData));
+    } catch (error) {
+      console.error('Failed to persist store to localStorage:', error);
+    }
+  },
+  restoreFromLocalStorage: () => {
+    try {
+      const stored = localStorage.getItem('busStore');
+      if (stored) {
+        const data = JSON.parse(stored);
+        set({
+          busId: data.busId,
+          driverId: data.driverId,
+          isSharing: data.isSharing,
+          offlineLocationQueue: data.offlineLocationQueue || [],
+          locationHistory: data.locationHistory || [],
+        });
+      }
+    } catch (error) {
+      console.error('Failed to restore store from localStorage:', error);
+    }
+  },
 });
 
 export const useBusStore = create<BusState>(storeCreator);
