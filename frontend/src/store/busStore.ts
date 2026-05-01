@@ -46,6 +46,9 @@ export interface BusState {
   lastLocationReceived: number;
   stopArrivalAlerts: Record<string, boolean>;
   
+  // Location history (max 100 recent locations for tracking)
+  locationHistory: BusLocation[];
+  
   // Actions
   setBusMeta: (payload: { busId: string; busNumber?: string | null }) => void;
   setRoute: (route: Feature<LineString> | null, stops: Stop[]) => void;
@@ -53,9 +56,12 @@ export interface BusState {
   setEta: (etaMinutes: number | null) => void;
   setStatus: (status: BusStatus) => void;
   setNextStop: (stop: Stop | null) => void;
+  addLocationToHistory: (location: BusLocation) => void;
+  clearOldLocations: (maxAge: number) => void;
+  getLocationHistory: () => BusLocation[];
 }
 
-const storeCreator: StateCreator<BusState> = (set) => ({
+const storeCreator: StateCreator<BusState> = (set, get) => ({
   busId: null,
   busNumber: null,
   routeGeoJson: null,
@@ -72,6 +78,7 @@ const storeCreator: StateCreator<BusState> = (set) => ({
   routeUpdateTimestamp: 0,
   lastLocationReceived: 0,
   stopArrivalAlerts: {},
+  locationHistory: [],
   setBusMeta: ({ busId, busNumber = null }: { busId: string; busNumber?: string | null }) =>
     set(() => ({ busId, busNumber })),
   setRoute: (route: Feature<LineString> | null, stops: Stop[]) =>
@@ -87,6 +94,18 @@ const storeCreator: StateCreator<BusState> = (set) => ({
   setEta: (etaMinutes: number | null) => set(() => ({ etaMinutes })),
   setStatus: (status: BusStatus) => set(() => ({ status })),
   setNextStop: (stop: Stop | null) => set(() => ({ nextStop: stop })),
+  addLocationToHistory: (location: BusLocation) => set((state) => ({
+    locationHistory: [...state.locationHistory, location].slice(-100), // Keep last 100 locations
+  })),
+  clearOldLocations: (maxAge: number) => set((state) => {
+    const now = Date.now();
+    return {
+      locationHistory: state.locationHistory.filter(
+        (loc) => loc.timestamp ? (now - loc.timestamp) < maxAge : true
+      ),
+    };
+  }),
+  getLocationHistory: () => get().locationHistory,
 });
 
 export const useBusStore = create<BusState>(storeCreator);
